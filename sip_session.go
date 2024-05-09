@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/ghettovoice/gosip/sip"
-	"github.com/subiz/log"
 	"github.com/thanhpk/randstr"
 )
 
@@ -164,7 +164,7 @@ func (s *Session) GetEarlyMedia() string {
 	return s.answer
 }
 
-//ProvideOffer .
+// ProvideOffer .
 func (s *Session) ProvideOffer(sdp string) {
 	s.offer = sdp
 }
@@ -184,7 +184,7 @@ func (s *Session) Info2(content string, contentType string) {
 	s.sendRequest(req)
 }
 
-//ReInvite send re-INVITE
+// ReInvite send re-INVITE
 func (s *Session) ReInvite2() {
 	method := sip.INVITE
 	req := s.makeRequest(s.uaType, method, sip.MessageID(s.callID), s.request, s.response)
@@ -194,7 +194,7 @@ func (s *Session) ReInvite2() {
 	s.sendRequest(req)
 }
 
-//Bye send Bye request.
+// Bye send Bye request.
 func (s *Session) Bye() (sip.Response, error) {
 	req := s.makeRequest(s.uaType, sip.BYE, sip.MessageID(s.callID), s.request, s.response)
 	return s.sendRequest(req)
@@ -209,7 +209,6 @@ func (s *Session) Refer(tonumber string) (sip.Response, error) {
 }
 
 func (s *Session) sendRequest(req sip.Request) (sip.Response, error) {
-	// log.Info("", s.uaType+" send request: "+string(req.Method())+" =>\n", req)
 	return s.requestCallbck(context.TODO(), req, nil, false, 1)
 }
 
@@ -217,13 +216,13 @@ func (s *Session) sendRequest(req sip.Request) (sip.Response, error) {
 func (s *Session) Reject(statusCode sip.StatusCode, reason string) {
 	tx := (s.transaction.(sip.ServerTransaction))
 	request := s.request
-	log.Info("", "Reject: Request => %s, body => %s", request.Short(), request.Body())
+	fmt.Printf("Reject: Request => %s, body => %s\n", request.Short(), request.Body())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, statusCode, reason, "")
 	response.AppendHeader(s.contact)
 	tx.Respond(response)
 }
 
-//End end session
+// End end session
 func (s *Session) End() {
 	if s.status == Terminated {
 		return
@@ -235,7 +234,6 @@ func (s *Session) End() {
 	case Provisional:
 		fallthrough
 	case EarlyMedia:
-		log.Info("", "Canceling session.")
 		switch s.transaction.(type) {
 		case sip.ClientTransaction:
 			s.transaction.(sip.ClientTransaction).Cancel()
@@ -249,13 +247,11 @@ func (s *Session) End() {
 	case WaitingForAnswer:
 		fallthrough
 	case Answered:
-		log.Info("", "Rejecting session", s.callID)
 		s.Reject(603, "Decline")
 
 	case WaitingForACK:
 		fallthrough
 	case Confirmed:
-		log.Info("", "Terminating session.", s.callID)
 		s.Bye()
 	}
 }
@@ -265,7 +261,7 @@ func (s *Session) Accept(statusCode sip.StatusCode) {
 	tx := (s.transaction.(sip.ServerTransaction))
 
 	if len(s.answer) == 0 {
-		log.Info("", "Answer sdp is nil!")
+		fmt.Println("Answer sdp is nil!")
 		return
 	}
 	request := s.request
@@ -290,7 +286,6 @@ func (s *Session) Accept(statusCode sip.StatusCode) {
 
 // Redirect send a 3xx
 func (s *Session) Redirect(target string, code sip.StatusCode) {
-
 }
 
 // Provisional send a provisional code 100|180|183

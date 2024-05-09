@@ -9,7 +9,6 @@ import (
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/sip/parser"
 	"github.com/google/uuid"
-	"github.com/subiz/log"
 	"github.com/thanhpk/randstr"
 )
 
@@ -52,7 +51,7 @@ func (r *Register) SendRegister(expires uint32) error {
 	if r.request == nil || expires == 0 {
 		request, err := buildRequest(sip.REGISTER, from, to, contact, recipient, profile.Routes, nil)
 		if err != nil {
-			log.Err("", err, "Register: err")
+			fmt.Println("Register: err", err)
 			return err
 		}
 		expiresHeader := sip.Expires(expires)
@@ -75,7 +74,7 @@ func (r *Register) SendRegister(expires uint32) error {
 	resp, err := r.ua.RequestWithContext(r.ctx, *r.request, r.authorizer, true, 1)
 
 	if err != nil {
-		log.Err("", err, "Request Failed", sip.REGISTER)
+		fmt.Println(err, "Request Failed", sip.REGISTER)
 		var code sip.StatusCode
 		var reason string
 		if _, ok := err.(*sip.RequestError); ok {
@@ -95,11 +94,10 @@ func (r *Register) SendRegister(expires uint32) error {
 			Expiration: 0,
 			UserData:   r.data,
 		}
-		log.Err("", err, "Request ", sip.REGISTER, ", has state", state)
+		fmt.Println(err, "Request ", sip.REGISTER, ", has state", state)
 	}
 	if resp != nil {
 		// stateCode := resp.StatusCode()
-		// log.Info("", sip.REGISTER, "resp", stateCode, "=>", resp.String())
 		var expires uint32 = 0
 		hdrs := resp.GetHeaders("Expires")
 		if len(hdrs) > 0 {
@@ -135,7 +133,6 @@ func (r *Register) SendRegister(expires uint32) error {
 			r.request = nil
 		}
 
-		// log.Info("", "Request", sip.REGISTER, "response: state =>", state)
 	}
 	return nil
 }
@@ -225,13 +222,13 @@ func NewProfile(uri sip.Uri, displayName string, authInfo *AuthInfo, expires uin
 		if err == nil {
 			p.ContactURI = uri
 		} else {
-			log.Err("", err, "Error parsing contact URI")
+			fmt.Println(err, "Error parsing contact URI")
 		}
 	}
 
 	uid, err := uuid.NewUUID()
 	if err != nil {
-		log.Err("", err, "could not create UUID")
+		fmt.Println(err, "could not create UUID")
 	}
 	p.InstanceID = fmt.Sprintf(`"<%s>"`, uid.URN())
 	return p

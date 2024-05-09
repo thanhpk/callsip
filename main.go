@@ -21,12 +21,11 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v4/pkg/media/oggwriter"
-	"github.com/subiz/log"
 	"github.com/thanhpk/randstr"
 )
 
 var asteriskIp = "27.71.226.145"
-var privateIp = "192.168.5.131"
+var privateIp string
 
 // UserAgent .
 type UserAgent struct {
@@ -105,14 +104,13 @@ func (me *UserAgent) Invite(callid string, target sip.Uri, recipient sip.SipUri)
 
 	resp, err := me.RequestWithContext(context.TODO(), *request, authorizer, false, 1)
 	if err != nil {
-		return log.EServer(err)
+		return err
 	}
 	if resp != nil {
 		stateCode := resp.StatusCode()
-		log.Info("", "INVITE: resp %d => %s", stateCode, resp.String())
-		return log.EServer(nil, log.M{"reason": resp.String(), "msg": "Invite session is unsuccessful", "code": stateCode})
+		fmt.Println("INVITE: resp %d => %s", stateCode, resp.String())
+		return err
 	}
-
 	return nil
 }
 
@@ -179,7 +177,7 @@ func (ua *UserAgent) handleInviteState(is *Session, request *sip.Request, respon
 func (ua *UserAgent) Register(domain string, userdata interface{}) error {
 	sipuri, err := parser.ParseSipUri("sip:" + ua.username + "@" + domain + ";transport=udp")
 	if err != nil {
-		return log.EInvalidField("subiz", "url", "sip:"+ua.username+"@"+domain, log.M{"err": err})
+		return err
 	}
 
 	profile := NewProfile(sipuri.Clone(), "Subiz WC", &AuthInfo{AuthUser: ua.username, Password: ua.password}, 1800, ua.stack)
@@ -189,15 +187,13 @@ func (ua *UserAgent) Register(domain string, userdata interface{}) error {
 	register := NewRegister(ua, profile, sipuri, userdata)
 	ua.register = register
 	if err := register.SendRegister(expires); err != nil {
-		log.Err("", err, "SendRegister failed")
 		return err
 	}
 
 	go func() {
 		for ua.register == register {
-			log.Info("subiz", "sending register")
 			if err := register.SendRegister(expires); err != nil {
-				log.Err("", err, "SendRegister failed")
+				fmt.Println("SendRegister failed", err)
 			}
 			time.Sleep(5 * time.Minute)
 		}
@@ -205,12 +201,8 @@ func (ua *UserAgent) Register(domain string, userdata interface{}) error {
 	return nil
 }
 
-// func (ua *UserAgent) Request(req *sip.Request) (sip.ClientTransaction, error) {
-// return ua.stack.Request(*req)
-// }
-
 func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
-	log.Info("", "handleBye: Request => %s, body => %s", request.Short(), request.Body())
+	fmt.Println("handleBye: Request => %s, body => %s", request.Short(), request.Body())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", "")
 
 	if viaHop, ok := request.ViaHop(); ok {
@@ -248,7 +240,7 @@ func (ua *UserAgent) handleBye(request sip.Request, tx sip.ServerTransaction) {
 }
 
 func (ua *UserAgent) handleCancel(request sip.Request, tx sip.ServerTransaction) {
-	log.Info("", "handleCancel: Request => %s, body => %s", request.Short(), request.Body())
+	fmt.Println("handleCancel: Request => %s, body => %s", request.Short(), request.Body())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", "")
 	tx.Respond(response)
 
@@ -265,7 +257,7 @@ func (ua *UserAgent) handleCancel(request sip.Request, tx sip.ServerTransaction)
 }
 
 func (ua *UserAgent) handleACK(request sip.Request, tx sip.ServerTransaction) {
-	log.Info("", "handleACK => ", request.Short(), "body", request.Body())
+	fmt.Println("handleACK => ", request.Short(), "body", request.Body())
 	callID, ok := request.CallID()
 	if ok {
 		if v, found := ua.iss.Load(*callID); found {
@@ -278,8 +270,7 @@ func (ua *UserAgent) handleACK(request sip.Request, tx sip.ServerTransaction) {
 }
 
 func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction) {
-	log.Info("", "handleInvite => "+request.Short())
-
+	fmt.Println("handleInvite => " + request.Short())
 	callID, ok := request.CallID()
 	if ok {
 		var transaction sip.Transaction = tx.(sip.Transaction)
@@ -312,7 +303,7 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 		if cancel == nil {
 			return
 		}
-		log.Info("", "Cancel \n", cancel.String())
+		fmt.Println("Cancel \n", cancel.String())
 		response := sip.NewResponseFromRequest(cancel.MessageID(), cancel, 200, "OK", "")
 		if callID, ok := response.CallID(); ok {
 			if v, found := ua.iss.Load(*callID); found {
@@ -329,13 +320,12 @@ func (ua *UserAgent) handleInvite(request sip.Request, tx sip.ServerTransaction)
 	go func() {
 		ack := <-tx.Acks()
 		if ack != nil {
-			log.Info("", "ack =>", ack)
+			fmt.Println("ack =>", ack)
 		}
 	}()
 }
 
 func (ua *UserAgent) handleUpdate(request sip.Request, tx sip.ServerTransaction) {
-	log.Info("", "handleUpdate: Request =>", request.Short())
 	response := sip.NewResponseFromRequest(request.MessageID(), request, 200, "OK", "")
 	tx.Respond(response)
 }
@@ -372,7 +362,6 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 	errs := make(chan error)
 	go func() {
 		var lastResponse sip.Response
-
 		previousResponses := make([]sip.Response, 0)
 		previousResponsesStatuses := make(map[sip.StatusCode]bool)
 
@@ -504,7 +493,7 @@ func (ua *UserAgent) RequestWithContext(ctx context.Context, request sip.Request
 				}
 				sipreq, ok := err.(*sip.RequestError)
 				if !ok {
-					log.Info("subiz", "EEEEEEEEEEEEE", err)
+					fmt.Println("EEEEEEEEEEEEE", err)
 					return nil, err
 				}
 				request := sipreq.Request
@@ -766,6 +755,7 @@ func BuildLocalSdp(host string, port int) string {
 }
 
 func main() {
+	fmt.Println("CallSip. Version v0.0.1")
 	var username, password string
 	if len(os.Args) > 1 {
 		username = os.Args[1]
@@ -784,6 +774,13 @@ func main() {
 		fmt.Println("missing username or password or callto parameters, should call ./callsip username password 201@callcenter.subiz.com.vn")
 		os.Exit(1)
 		return
+	}
+
+	var err error
+	privateIp, err = externalIP()
+	if err != nil {
+		fmt.Println("CANNOT GET IP", err)
+		os.Exit(1)
 	}
 
 	stack := NewSipStack(privateIp, "SubizTestCall 1")
