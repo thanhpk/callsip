@@ -13,8 +13,6 @@ import (
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/ghettovoice/gosip/transaction"
 	"github.com/ghettovoice/gosip/transport"
-	"github.com/ghettovoice/gosip/util"
-	"github.com/tevino/abool"
 )
 
 // RequestHandler is a callback that will be called on the incoming request
@@ -24,18 +22,17 @@ type RequestHandler func(req sip.Request, tx sip.ServerTransaction)
 
 // SipStack a golang SIP Stack
 type SipStack struct {
-	running               abool.AtomicBool
-	listenPorts           map[string]*sip.Port
-	tp                    transport.Layer
-	tx                    transaction.Layer
-	userAgent             string
-	host                  string
-	hwg                   *sync.WaitGroup
-	hmu                   *sync.RWMutex
-	requestHandlers       map[sip.RequestMethod]RequestHandler
-	handleConnectionError func(err *transport.ConnectionError)
-	invites               map[transaction.TxKey]sip.Request
-	invitesLock           *sync.RWMutex
+	running         bool
+	listenPorts     map[string]*sip.Port
+	tp              transport.Layer
+	tx              transaction.Layer
+	userAgent       string
+	host            string
+	hwg             *sync.WaitGroup
+	hmu             *sync.RWMutex
+	requestHandlers map[sip.RequestMethod]RequestHandler
+	invites         map[transaction.TxKey]sip.Request
+	invitesLock     *sync.RWMutex
 }
 
 // NewSipStack creates new instance of SipStack.
@@ -62,7 +59,7 @@ func NewSipStack(host, userAgent string) *SipStack {
 	sipTp := &sipTransport{tpl: s.tp, s: s}
 	s.tx = transaction.NewLayer(sipTp, NewLogger())
 
-	s.running.Set()
+	s.running = true
 	go s.serve()
 
 	return s
@@ -141,12 +138,6 @@ func (s *SipStack) serve() {
 			} else {
 				fmt.Println(err, "received SIP transport error")
 			}
-
-			if connError, ok := err.(*transport.ConnectionError); ok {
-				if s.handleConnectionError != nil {
-					s.handleConnectionError(connError)
-				}
-			}
 		}
 	}
 }
@@ -194,7 +185,7 @@ func (s *SipStack) handleRequest(req sip.Request, tx sip.ServerTransaction) {
 
 // Request Send SIP message
 func (s *SipStack) Request(req sip.Request) (sip.ClientTransaction, error) {
-	if !s.running.IsSet() {
+	if !s.running {
 		return nil, fmt.Errorf("can not send through stopped server")
 	}
 
@@ -207,8 +198,8 @@ func (s *SipStack) GetNetworkInfo(protocol string) *transport.Target {
 	var target transport.Target
 	if s.host != "" {
 		target.Host = s.host
-	} else if v, err := util.ResolveSelfIP(); err == nil {
-		target.Host = v.String()
+	} else if v, err := externalIP(); err == nil {
+		target.Host = v
 	} else {
 		panic("resolve host IP failed" + err.Error())
 	}
@@ -278,7 +269,7 @@ func (s *SipStack) prepareRequest(req sip.Request) sip.Request {
 
 // Respond .
 func (s *SipStack) Respond(res sip.Response) (sip.ServerTransaction, error) {
-	if !s.running.IsSet() {
+	if !s.running {
 		return nil, fmt.Errorf("can not send through stopped server")
 	}
 
@@ -287,7 +278,7 @@ func (s *SipStack) Respond(res sip.Response) (sip.ServerTransaction, error) {
 
 // Send .
 func (s *SipStack) Send(msg sip.Message) error {
-	if !s.running.IsSet() {
+	if !s.running {
 		return fmt.Errorf("can not send through stopped server")
 	}
 
@@ -308,10 +299,10 @@ func (s *SipStack) prepareResponse(res sip.Response) sip.Response {
 
 // Shutdown gracefully shutdowns SIP server
 func (s *SipStack) Shutdown() {
-	if !s.running.IsSet() {
+	if !s.running {
 		return
 	}
-	s.running.UnSet()
+	s.running = false
 	// stop transaction layer
 	s.tx.Cancel()
 	<-s.tx.Done()
@@ -329,12 +320,6 @@ func (s *SipStack) OnRequest(method sip.RequestMethod, handler RequestHandler) e
 	s.hmu.Unlock()
 
 	return nil
-}
-
-func (s *SipStack) OnConnectionError(handler func(err *transport.ConnectionError)) {
-	s.hmu.Lock()
-	s.handleConnectionError = handler
-	s.hmu.Unlock()
 }
 
 func (s *SipStack) appendAutoHeaders(msg sip.Message) {
@@ -435,9 +420,6 @@ func (tp *sipTransport) IsStreamed(network string) bool {
 
 func NewLogger() log.Logger {
 	return &MuteLogger{} // mute
-
-	// Output to stdout instead of the default stderr
-	// Can be any io.Writer, see below for File example
 }
 
 type MuteLogger struct{}

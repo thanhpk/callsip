@@ -75,13 +75,6 @@ func (udpConn *UDPConn) SetWriteDeadline(deadline time.Time) error {
 	return udpConn.udpconn.SetWriteDeadline(deadline)
 }
 
-func FromUDPConn(conn *net.UDPConn) *UDPConn {
-	udpConn := &UDPConn{
-		udpconn: conn,
-	}
-	return udpConn
-}
-
 func NewUDPConn() (*UDPConn, int) {
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{
 		IP: net.ParseIP("0.0.0.0"),

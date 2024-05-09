@@ -8,7 +8,6 @@ require (
 	github.com/pion/rtp v1.8.6
 	github.com/pion/sdp/v3 v3.0.9
 	github.com/pion/webrtc/v4 v4.0.0-beta.19
-	github.com/tevino/abool v1.2.0
 	github.com/thanhpk/randstr v1.0.6
 )
 
@@ -25,6 +24,7 @@ require (
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/tevino/abool v1.2.0 // indirect
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2 // indirect
 	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/net v0.25.0 // indirect
